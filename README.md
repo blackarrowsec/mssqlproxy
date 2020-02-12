@@ -17,7 +17,7 @@ It consists of three parts:
 *  **Core DLL**: Compile reciclador.sln
 *  **Client**: mssqlclient.py (based on Impacket's example)
 
-You can compile the libraries or download them from releases (x64).
+You can compile the libraries or download them from [releases](https://github.com/blackarrowsec/mssqlproxy/releases) (x64).
 
 
 Compilation
