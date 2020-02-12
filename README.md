@@ -69,6 +69,8 @@ Once the proxy is started, you can plug in your proxychains ;)
 
 **Note #2:** at the moment, only IPv4 targets are supported (nor DNS neither IPv6 addresses).
 
+**Note #3:** use carefully! by now the MSSQL service will crash if you try to establish multiple concurrent connections
+
 **Important:** It's important to stop the mssqlproxy by pressing Ctrl+C on the client. If not, the server may crash and you will have to restart the MSSQL service manually.
 
 
