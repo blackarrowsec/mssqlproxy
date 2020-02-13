@@ -162,7 +162,7 @@ def proxy_start(mssql, args):
         mssql.batch("DECLARE @ip varchar(15); SET @ip=TRIM(CONVERT(char(15), CONNECTIONPROPERTY('client_net_address')));"
                     "EXEC msdb.dbo.%s '%s', @ip, %d" % (PROCEDURE_NAME, args.reciclador, lport), tuplemode=False, wait=False)
         data = mssql.socket.recv(2048)
-        if 'this is my Child' in data:
+        if 'Powered by blackarrow.net' in data:
             logging.debug("ACK from server!")
             mssql.socket.sendall("ACK")
         else:
