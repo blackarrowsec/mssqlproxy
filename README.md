@@ -77,7 +77,7 @@ Once the proxy is started, you can plug in your proxychains ;)
 
 Authors
 ---------------
-Pablo Martinez ([@xassiz](https://twitter.com/xassiz)), Juan Manuel Fernandez ([@TheXC3LL](https://twitter.com/TheXC3LL))
+Pablo Martinez ([@xassiz](https://twitter.com/xassiz)), Juan Manuel Fernandez ([@TheXC3LL](https://twitter.com/TheXC3LL)) [ [www.blackarrow.net](http://blackarrow.net/) - [www.tarlogic.com](https://www.tarlogic.com/en/) ]
 
 
 References
